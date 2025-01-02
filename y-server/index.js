@@ -4,7 +4,7 @@ import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
 import fs from "fs/promises";
 
-const app = express();
+export const app = express();
 const port = 3000;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5M
 const DB_PATH = "./uploads/db/images.json";
@@ -41,6 +41,22 @@ const initializeDirectories = async () => {
   }
 };
 
+const uploadMiddleware = (req, res, next) => {
+  upload.single("image")(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(413).json({
+          error: `File too large. Maximum size is ${
+            MAX_FILE_SIZE / (1024 * 1024)
+          }MB`,
+        });
+      }
+      return res.status(400).json({ error: err.message });
+    }
+    next(err);
+  });
+};
+
 const readImagesData = async () => {
   try {
     const data = await fs.readFile(DB_PATH);
@@ -59,9 +75,10 @@ const writeImagesData = async (data) => {
   }
 };
 
-app.post("/v1/images", upload.single("image"), async (req, res) => {
+app.post("/v1/images", uploadMiddleware, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No image provided" });
+
     const id = req.file.filename.split(".")[0];
     const expiry = Date.now() + parseInt(req.body.expirationTime) * 60 * 1000;
 
