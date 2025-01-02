@@ -60,7 +60,10 @@ const uploadMiddleware = (req, res, next) => {
 const readImagesData = async () => {
   try {
     const data = await fs.readFile(DB_PATH);
-    return JSON.parse(data);
+    if (data) {
+      return JSON.parse(data);
+    }
+    return {};
   } catch (error) {
     console.error("Error reading images data:", error);
     return {};
@@ -116,6 +119,20 @@ app.get("/v1/images/:imageID", async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
+
+setInterval(async () => {
+  try {
+    const now = Date.now();
+    const images = await readImagesData();
+    for (const key of Object.keys(images)) {
+      if (now > images[key].expiry) {
+        fs.unlink(images[key].path, () => {});
+        delete images[key];
+        await writeImagesData(images);
+      }
+    }
+  } catch (e) {}
+}, 60 * 1000);
 
 initializeDirectories().then(() => {
   app.listen(port, () => {
